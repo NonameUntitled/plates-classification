@@ -8,3 +8,7 @@ import torch.optim as optim
 import torchvision
 import torchvision.models as models
 import torchvision.transforms as transforms
+
+
+class PlateClassification(nn.Module):
+    pass
