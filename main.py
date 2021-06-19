@@ -124,12 +124,53 @@ def select_best_circle(masked_img, mask, biggest_contour):
         circles_emptiness_ratio = list(map(emptiness_percentage, filtered_circles))
         circle_info = list(zip(filtered_circles, circles_emptiness_ratio))
         filtered_circle_info = list(filter(lambda circle_xyr_d: circle_xyr_d[1] < EMPTINESS_THRESHOLD, circle_info))
-        best_circle_info = max(filtered_circle_info, key=lambda c: c[0][2])
-        best_x, best_y, best_r = best_circle_info[0]
+        if len(filtered_circle_info) == 0:
+            best_x, best_y, best_r = img_w // 2, img_h // 2, FOREGROUND_RADIUS
+        else:
+            best_circle_info = max(filtered_circle_info, key=lambda c: c[0][2])
+            best_x, best_y, best_r = best_circle_info[0]
     else:
         best_x, best_y, best_r = img_w // 2, img_h // 2, FOREGROUND_RADIUS
 
     return best_x, best_y, best_r
+
+
+def process_img(img):
+    img_orig = img.copy()
+
+    plate_mask = apply_grab_cut(img)
+    plate_mask, biggest_contour = select_main_area_only(plate_mask)
+
+    masked_img = cv2.bitwise_and(img_orig, img_orig, mask=plate_mask)
+    best_x, best_y, best_r = select_best_circle(masked_img, plate_mask, biggest_contour)
+
+    circle_mask = np.zeros(img_orig.shape[:2], dtype=np.uint8)
+    cv2.circle(circle_mask, (best_x, best_y), int(round(best_r)), 255, -1)
+    masked_img = cv2.bitwise_and(masked_img, masked_img, mask=circle_mask)
+
+    img_center = masked_img.copy()[
+                 int(best_y - best_r / np.sqrt(2)): int(best_y + best_r / np.sqrt(2)),
+                 int(best_x - best_r / np.sqrt(2)): int(best_x + best_r / np.sqrt(2))
+                 ]
+
+    img_up_left = masked_img.copy()[
+                  int(best_y - best_r / np.sqrt(2)): int(best_y),
+                  int(best_x - best_r / np.sqrt(2)): int(best_x)
+                  ]
+    img_up_right = masked_img.copy()[
+                   int(best_y - best_r / np.sqrt(2)): int(best_y),
+                   int(best_x): int(best_x + best_r / np.sqrt(2))
+                   ]
+    img_down_left = masked_img.copy()[
+                    int(best_y): int(best_y + best_r / np.sqrt(2)),
+                    int(best_x - best_r / np.sqrt(2)): int(best_x)
+                    ]
+    img_down_right = masked_img.copy()[
+                     int(best_y): int(best_y + best_r / np.sqrt(2)),
+                     int(best_x): int(best_x + best_r / np.sqrt(2))
+                     ]
+
+    return img_center, img_up_left, img_up_right, img_down_left, img_down_right
 
 
 if __name__ == '__main__':
@@ -137,58 +178,42 @@ if __name__ == '__main__':
     positive_path_save_ = r'data/train/processed_train/cleaned'
     negative_path_ = r'./data/train/dirty'
     negative_path_save_ = r'data/train/processed_train/dirty'
+    test_path_ = r'./data/test'
+    test_path_save_ = r'./data/processed_test'
 
     pathlib.Path(positive_path_save_).mkdir(parents=True, exist_ok=True)
     pathlib.Path(negative_path_save_).mkdir(parents=True, exist_ok=True)
 
-    for idx_, filename_ in enumerate(tqdm(os.listdir(negative_path_))):
-        filepath_ = os.path.join(negative_path_, filename_)
+    process_type_ = 'test'  # 'cleaned', 'dirty', 'test'
 
+    # data_path = r'./data/test'
+    # path_to_save = r'./data/processed_test'
+    # for filename in os.listdir(data_path):
+    #     filepath = os.path.join(data_path, filename)
+    #     save_prefix = filename.split('.')[0]
+
+    if process_type_ == 'cleaned':
+        data_path_ = positive_path_
+        save_path_ = positive_path_save_
+    elif process_type_ == 'dirty':
+        data_path_ = negative_path_
+        save_path_ = negative_path_save_
+    else:
+        data_path_ = test_path_
+        save_path_ = test_path_save_
+
+    for idx_, filename_ in enumerate(tqdm(os.listdir(data_path_))):
+        filepath_ = os.path.join(data_path_, filename_)
         img_ = cv2.imread(filepath_)
-        img_orig_ = img_.copy()
-        img_h_, img_w_ = img_.shape[:2]
+        img_center_, img_up_left_, img_up_right_, img_down_left_, img_down_right_ = process_img(img_)
 
-        plate_mask_ = apply_grab_cut(img_)
-        plate_mask_, biggest_contour_ = select_main_area_only(plate_mask_)
-
-        masked_img_ = cv2.bitwise_and(img_orig_, img_orig_, mask=plate_mask_)
-        best_x_, best_y_, best_r_ = select_best_circle(masked_img_, plate_mask_, biggest_contour_)
-
-        circle_mask_ = np.zeros(img_orig_.shape[:2], dtype=np.uint8)
-        cv2.circle(circle_mask_, (best_x_, best_y_), int(round(best_r_)), 255, -1)
-        masked_img_ = cv2.bitwise_and(masked_img_, masked_img_, mask=circle_mask_)
-
-        img_center = masked_img_.copy()[
-                     int(best_y_ - best_r_ / np.sqrt(2)): int(best_y_ + best_r_ / np.sqrt(2)),
-                     int(best_x_ - best_r_ / np.sqrt(2)): int(best_x_ + best_r_ / np.sqrt(2))
-                     ]
-
-        img_up_left = masked_img_.copy()[
-                      int(best_y_ - best_r_ / np.sqrt(2)): int(best_y_),
-                      int(best_x_ - best_r_ / np.sqrt(2)): int(best_x_)
-                      ]
-        img_up_right = masked_img_.copy()[
-                       int(best_y_ - best_r_ / np.sqrt(2)): int(best_y_),
-                       int(best_x_): int(best_x_ + best_r_ / np.sqrt(2))
-                       ]
-        img_down_left = masked_img_.copy()[
-                        int(best_y_): int(best_y_ + best_r_ / np.sqrt(2)),
-                        int(best_x_ - best_r_ / np.sqrt(2)): int(best_x_)
-                        ]
-        img_down_right = masked_img_.copy()[
-                         int(best_y_): int(best_y_ + best_r_ / np.sqrt(2)),
-                         int(best_x_): int(best_x_ + best_r_ / np.sqrt(2))
-                         ]
-
-        cv2.imwrite(os.path.join(negative_path_save_, f'cleaned_{idx_}_up_left.png'), img_up_left)
-        cv2.imwrite(os.path.join(negative_path_save_, f'cleaned_{idx_}_up_right.png'), img_up_right)
-        cv2.imwrite(os.path.join(negative_path_save_, f'cleaned_{idx_}_down_left.png'), img_down_left)
-        cv2.imwrite(os.path.join(negative_path_save_, f'cleaned_{idx_}_down_right.png'), img_down_right)
-        cv2.imwrite(os.path.join(negative_path_save_, f'cleaned_{idx_}_center.png'), img_center)
-
-        # cv2.imshow('original', img_orig_)
-        # cv2.imshow('result', masked_img_)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
-
-        # TODO Add center and a whole picture
+        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_up_left.png'),
+                    img_up_left_)
+        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_up_right.png'),
+                    img_up_right_)
+        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_down_left.png'),
+                    img_down_left_)
+        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_down_right.png'),
+                    img_down_right_)
+        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_center.png'),
+                    img_center_)

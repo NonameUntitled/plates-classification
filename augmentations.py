@@ -1,3 +1,6 @@
+import shutil
+
+import cv2
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,9 +14,13 @@ from torchvision.datasets import ImageFolder
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import trange, tqdm
+import os
+from PIL import Image
+from collections import defaultdict, Counter
 
 TRAIN_DIR = r'data/train/processed_train'
 VAL_DIR = r'data/train/processed_val'
+TEST_DIR = r'data/processed_test'
 
 BATCH_SIZE = 16  # Количество изображений в батче
 
@@ -39,7 +46,7 @@ def train_model(model, loss, optimizer, scheduler, num_epochs):
     loss_hist = {'train': [], 'val': []}
     acc_hist = {'train': [], 'val': []}
 
-    for _ in trange(num_epochs):
+    for _ in range(num_epochs):
         for phase in ['train', 'val']:
             if phase == 'train':
                 dataloader = train_dataloader
@@ -82,6 +89,22 @@ def train_model(model, loss, optimizer, scheduler, num_epochs):
 
 
 if __name__ == '__main__':
+    # filenames = os.listdir(os.path.join(TRAIN_DIR, 'cleaned'))
+    # np.random.shuffle(filenames)
+    # for idx, filename in enumerate(filenames):
+    #     if idx % 6 == 5:
+    #         old_filepath = os.path.join(TRAIN_DIR, 'cleaned', filename)
+    #         new_path = os.path.join(VAL_DIR, 'cleaned', filename)
+    #         shutil.move(old_filepath, new_path)
+    # filenames = os.listdir(os.path.join(TRAIN_DIR, 'dirty'))
+    # np.random.shuffle(filenames)
+    # for idx, filename in enumerate(filenames):
+    #     if idx % 6 == 5:
+    #         old_filepath = os.path.join(TRAIN_DIR, 'dirty', filename)
+    #         new_path = os.path.join(VAL_DIR, 'dirty', filename)
+    #         shutil.move(old_filepath, new_path)
+    # exit(0)
+
     model = PlateClassification()
     loss_function = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), amsgrad=True, lr=0.001)
@@ -107,6 +130,12 @@ if __name__ == '__main__':
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
+    test_transforms = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
     train_dataset = torchvision.datasets.ImageFolder(TRAIN_DIR, train_transforms)
     val_dataset = torchvision.datasets.ImageFolder(VAL_DIR, val_transforms)
 
@@ -122,22 +151,51 @@ if __name__ == '__main__':
 
     model, loss_history, accuracy_history = train_model(model, loss_function, optimizer, scheduler, 40)
 
-    plt.rcParams['figure.figsize'] = (14, 7)
-    for experiment_id in accuracy_history.keys():
-        plt.plot(accuracy_history[experiment_id], label=experiment_id)
-    plt.legend(loc='upper left')
-    plt.title('Model Accuracy')
-    plt.xlabel('Epoch num', fontsize=15)
-    plt.ylabel('Accuracy value', fontsize=15)
-    plt.grid(linestyle='--', linewidth=0.5, color='.7')
-    plt.show()
+    # Test
+    img_info = defaultdict(list)
+    for filename in tqdm(os.listdir(TEST_DIR)):
+        img_id = filename[filename.find('_') + 1: filename.find('_') + 5]
+        filepath = os.path.join(TEST_DIR, filename)
+        img = Image.open(filepath)
+        img = test_transforms(img)
+        img = torch.reshape(img, (1, *img.shape)).to(DEVICE)
+        res = model(img).cpu().argmax(dim=1).item()
+        img_info[img_id].append(res)
 
-    plt.rcParams['figure.figsize'] = (14, 7)
-    for experiment_id in loss_history.keys():
-        plt.plot(loss_history[experiment_id], label=experiment_id)
-    plt.legend(loc='upper left')
-    plt.title('Model Loss')
-    plt.xlabel('Epoch num', fontsize=15)
-    plt.ylabel('Loss function value', fontsize=15)
-    plt.grid(linestyle='--', linewidth=0.5, color='.7')
-    plt.show()
+    mapping = {}
+    for key, lst in sorted(list(img_info.items()), key=lambda x: x[0]):
+        counter = Counter(lst)
+        if counter[1] >= counter[0]:
+            mapping[key] = 'cleaned'
+        else:
+            mapping[key] = 'dirty'
+
+    data = []
+    for key, item in mapping.items():
+        data.append([key, item])
+
+    import pandas as pd
+
+    df = pd.DataFrame(data, columns=['id', 'target'])
+    df.to_csv('./results.csv')
+
+
+    # plt.rcParams['figure.figsize'] = (14, 7)
+    # for experiment_id in accuracy_history.keys():
+    #     plt.plot(accuracy_history[experiment_id], label=experiment_id)
+    # plt.legend(loc='upper left')
+    # plt.title('Model Accuracy')
+    # plt.xlabel('Epoch num', fontsize=15)
+    # plt.ylabel('Accuracy value', fontsize=15)
+    # plt.grid(linestyle='--', linewidth=0.5, color='.7')
+    # plt.show()
+    #
+    # plt.rcParams['figure.figsize'] = (14, 7)
+    # for experiment_id in loss_history.keys():
+    #     plt.plot(loss_history[experiment_id], label=experiment_id)
+    # plt.legend(loc='upper left')
+    # plt.title('Model Loss')
+    # plt.xlabel('Epoch num', fontsize=15)
+    # plt.ylabel('Loss function value', fontsize=15)
+    # plt.grid(linestyle='--', linewidth=0.5, color='.7')
+    # plt.show()
