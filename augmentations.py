@@ -46,11 +46,11 @@ def train_model(model, loss, optimizer, scheduler, num_epochs):
     loss_hist = {'train': [], 'val': []}
     acc_hist = {'train': [], 'val': []}
 
-    for _ in range(num_epochs):
+    for i in range(num_epochs):
         for phase in ['train', 'val']:
             if phase == 'train':
                 dataloader = train_dataloader
-                scheduler.step()
+
                 model.train()
             else:
                 dataloader = val_dataloader
@@ -73,6 +73,7 @@ def train_model(model, loss, optimizer, scheduler, num_epochs):
                     if phase == 'train':
                         loss_value.backward()
                         optimizer.step()
+                        scheduler.step()
 
                 running_loss += loss_value.item()
                 running_acc += (y_pred_class == y_batch.data).float().mean().data.cpu().numpy()
@@ -81,6 +82,8 @@ def train_model(model, loss, optimizer, scheduler, num_epochs):
             epoch_acc = running_acc / len(dataloader)
 
             print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f} ', end='')
+
+            torch.save(model.state_dict(), f'./weights/model_{i:20d}.torch')
 
             loss_hist[phase].append(epoch_loss)
             acc_hist[phase].append(epoch_acc)
@@ -165,37 +168,36 @@ if __name__ == '__main__':
     mapping = {}
     for key, lst in sorted(list(img_info.items()), key=lambda x: x[0]):
         counter = Counter(lst)
-        if counter[1] >= counter[0]:
+        if counter[0] >= counter[1]:
             mapping[key] = 'cleaned'
         else:
             mapping[key] = 'dirty'
 
     data = []
     for key, item in mapping.items():
-        data.append([key, item])
+        data.append([int(key), item])
 
     import pandas as pd
 
-    df = pd.DataFrame(data, columns=['id', 'target'])
-    df.to_csv('./results.csv')
+    df = pd.DataFrame(data, columns=['id', 'label'])
+    df.to_csv('./results.csv', index=False)
 
+    plt.rcParams['figure.figsize'] = (14, 7)
+    for experiment_id in accuracy_history.keys():
+        plt.plot(accuracy_history[experiment_id], label=experiment_id)
+    plt.legend(loc='upper left')
+    plt.title('Model Accuracy')
+    plt.xlabel('Epoch num', fontsize=15)
+    plt.ylabel('Accuracy value', fontsize=15)
+    plt.grid(linestyle='--', linewidth=0.5, color='.7')
+    plt.show()
 
-    # plt.rcParams['figure.figsize'] = (14, 7)
-    # for experiment_id in accuracy_history.keys():
-    #     plt.plot(accuracy_history[experiment_id], label=experiment_id)
-    # plt.legend(loc='upper left')
-    # plt.title('Model Accuracy')
-    # plt.xlabel('Epoch num', fontsize=15)
-    # plt.ylabel('Accuracy value', fontsize=15)
-    # plt.grid(linestyle='--', linewidth=0.5, color='.7')
-    # plt.show()
-    #
-    # plt.rcParams['figure.figsize'] = (14, 7)
-    # for experiment_id in loss_history.keys():
-    #     plt.plot(loss_history[experiment_id], label=experiment_id)
-    # plt.legend(loc='upper left')
-    # plt.title('Model Loss')
-    # plt.xlabel('Epoch num', fontsize=15)
-    # plt.ylabel('Loss function value', fontsize=15)
-    # plt.grid(linestyle='--', linewidth=0.5, color='.7')
-    # plt.show()
+    plt.rcParams['figure.figsize'] = (14, 7)
+    for experiment_id in loss_history.keys():
+        plt.plot(loss_history[experiment_id], label=experiment_id)
+    plt.legend(loc='upper left')
+    plt.title('Model Loss')
+    plt.xlabel('Epoch num', fontsize=15)
+    plt.ylabel('Loss function value', fontsize=15)
+    plt.grid(linestyle='--', linewidth=0.5, color='.7')
+    plt.show()
