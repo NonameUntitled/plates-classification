@@ -1,6 +1,6 @@
 # Plates Classification Task
 
-This is kaggle competition solution. 
+This is a kaggle competition solution. 
 
 Competition is [here](https://www.kaggle.com/c/platesv2/overview).
 
@@ -10,8 +10,8 @@ Leaderboard position: 364/1423
 
 ### How was it achieved?
 
-1) Background subtraction (grab cut algorithm)
-2) Transfer learning (ResNet152 was taken as a CNN backbone)
+1) Background subtraction (GrabCut algorithm)
+2) Transfer learning (ResNet152 as a CNN backbone)
 3) Basic augmentations (flip, rotate, jitter)
 
 ### How can it be improved?
