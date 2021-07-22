@@ -4,10 +4,10 @@ import numpy as np
 from tqdm import tqdm
 import pathlib
 
-FOREGROUND_RADIUS = 60
+FOREGROUND_RADIUS = 50
 BACKGROUND_HEIGHT = 60
 BACKGROUND_WIDTH = 60
-BACKGROUND_DELTA = 5
+BACKGROUND_DELTA = 15
 
 EMPTINESS_THRESHOLD = 0.01
 
@@ -174,46 +174,42 @@ def process_img(img):
 
 
 if __name__ == '__main__':
-    positive_path_ = r'./data/train/cleaned'
-    positive_path_save_ = r'data/train/processed_train/cleaned'
-    negative_path_ = r'./data/train/dirty'
-    negative_path_save_ = r'data/train/processed_train/dirty'
-    test_path_ = r'./data/test'
-    test_path_save_ = r'./data/processed_test'
+    positive_path = r'./data/train/cleaned'
+    positive_path_save = r'data/train/processed_train/cleaned'
+    negative_path = r'./data/train/dirty'
+    negative_path_save = r'data/train/processed_train/dirty'
+    test_path = r'./data/test'
+    test_path_save = r'./data/processed_test'
 
-    pathlib.Path(positive_path_save_).mkdir(parents=True, exist_ok=True)
-    pathlib.Path(negative_path_save_).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(positive_path_save).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(negative_path_save).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(test_path_save).mkdir(parents=True, exist_ok=True)
 
-    process_type_ = 'test'  # 'cleaned', 'dirty', 'test'
+    process_types = ['cleaned', 'dirty', 'test']  # 'cleaned', 'dirty', 'test'
 
-    # data_path = r'./data/test'
-    # path_to_save = r'./data/processed_test'
-    # for filename in os.listdir(data_path):
-    #     filepath = os.path.join(data_path, filename)
-    #     save_prefix = filename.split('.')[0]
+    for process_type in process_types:
+        if process_type == 'cleaned':
+            data_path = positive_path
+            save_path = positive_path_save
+        elif process_type == 'dirty':
+            data_path = negative_path
+            save_path = negative_path_save
+        else:
+            data_path = test_path
+            save_path = test_path_save
 
-    if process_type_ == 'cleaned':
-        data_path_ = positive_path_
-        save_path_ = positive_path_save_
-    elif process_type_ == 'dirty':
-        data_path_ = negative_path_
-        save_path_ = negative_path_save_
-    else:
-        data_path_ = test_path_
-        save_path_ = test_path_save_
+        for idx, filename in enumerate(tqdm(os.listdir(data_path))):
+            filepath = os.path.join(data_path, filename)
+            img = cv2.imread(filepath)
+            img_center, img_up_left, img_up_right, img_down_left, img_down_right = process_img(img)
 
-    for idx_, filename_ in enumerate(tqdm(os.listdir(data_path_))):
-        filepath_ = os.path.join(data_path_, filename_)
-        img_ = cv2.imread(filepath_)
-        img_center_, img_up_left_, img_up_right_, img_down_left_, img_down_right_ = process_img(img_)
-
-        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_up_left.png'),
-                    img_up_left_)
-        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_up_right.png'),
-                    img_up_right_)
-        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_down_left.png'),
-                    img_down_left_)
-        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_down_right.png'),
-                    img_down_right_)
-        cv2.imwrite(os.path.join(save_path_, f'{process_type_}_{filename_.split(".")[0]}_{idx_}_center.png'),
-                    img_center_)
+            cv2.imwrite(os.path.join(save_path, f'{process_type}_{filename.split(".")[0]}_{idx}_up_left.png'),
+                        img_up_left)
+            cv2.imwrite(os.path.join(save_path, f'{process_type}_{filename.split(".")[0]}_{idx}_up_right.png'),
+                        img_up_right)
+            cv2.imwrite(os.path.join(save_path, f'{process_type}_{filename.split(".")[0]}_{idx}_down_left.png'),
+                        img_down_left)
+            cv2.imwrite(os.path.join(save_path, f'{process_type}_{filename.split(".")[0]}_{idx}_down_right.png'),
+                        img_down_right)
+            cv2.imwrite(os.path.join(save_path, f'{process_type}_{filename.split(".")[0]}_{idx}_center.png'),
+                        img_center)
