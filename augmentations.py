@@ -1,45 +1,16 @@
-import shutil
-
-import cv2
-import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import DataLoader
 
 import torchvision
-import torchvision.models as models
 import torchvision.transforms as transforms
-from torchvision.datasets import ImageFolder
 
-import numpy as np
-import matplotlib.pyplot as plt
-from tqdm import trange, tqdm
 import os
+from tqdm import tqdm
 from PIL import Image
+import matplotlib.pyplot as plt
 from collections import defaultdict, Counter
 
-TRAIN_DIR = r'data/train/processed_train'
-VAL_DIR = r'data/train/processed_val'
-TEST_DIR = r'data/processed_test'
-
-BATCH_SIZE = 64
-
-DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-
-class PlateClassification(nn.Module):
-    def __init__(self):
-        super(PlateClassification, self).__init__()
-        self.model = models.resnet152(pretrained=True)
-
-        for param in self.model.parameters():
-            param.requires_grad = False
-
-        self.model.fc = nn.Linear(self.model.fc.in_features, 2)
-        self.model.to(DEVICE)
-
-    def forward(self, x):
-        return self.model(x)
+from constants import *
+from model import PlateClassifier
 
 
 def train_model(model, loss, optimizer, scheduler, num_epochs):
@@ -91,84 +62,71 @@ def train_model(model, loss, optimizer, scheduler, num_epochs):
     return model, loss_hist, acc_hist
 
 
-def train_val_split():
-    cleaned_train_dir = os.path.join(TRAIN_DIR, 'cleaned')
-    cleaned_val_dir = os.path.join(VAL_DIR, 'cleaned')
-    dirty_train_dir = os.path.join(TRAIN_DIR, 'dirty')
-    dirty_val_dir = os.path.join(VAL_DIR, 'dirty')
-
-    for filename in os.listdir(cleaned_val_dir):
-        filepath = os.path.join(cleaned_val_dir, filename)
-        os.remove(filepath)
-
-    for filename in os.listdir(dirty_val_dir):
-        filepath = os.path.join(dirty_val_dir, filename)
-        os.remove(filepath)
-
-    cleaned_train_files = os.listdir(cleaned_train_dir)
-    np.random.shuffle(cleaned_train_files)
-    dirty_train_files = os.listdir(dirty_train_dir)
-    np.random.shuffle(dirty_train_files)
-
-    for idx, filename in enumerate(cleaned_train_files):
-        if idx % 5 == 0:
-            old_filepath = os.path.join(cleaned_train_dir, filename)
-            new_path = os.path.join(cleaned_val_dir, filename)
-            shutil.move(old_filepath, new_path)
-
-    for idx, filename in enumerate(dirty_train_files):
-        if idx % 5 == 0:
-            old_filepath = os.path.join(dirty_train_dir, filename)
-            new_path = os.path.join(dirty_val_dir, filename)
-            shutil.move(old_filepath, new_path)
-
-
 if __name__ == '__main__':
-    # train_val_split()
 
-    model = PlateClassification()
+    model = PlateClassifier()
     loss_function = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), amsgrad=True, lr=0.001)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=8, gamma=0.3)
 
-    train_transforms = transforms.Compose([
-        transforms.RandomChoice([
-            transforms.RandomRotation(0), transforms.RandomRotation(90),
-            transforms.RandomRotation(180), transforms.RandomRotation(270)
-        ]),
-        transforms.RandomPerspective(distortion_scale=0.09, p=0.75, interpolation=3, fill=255),
-        transforms.RandomGrayscale(),
-        transforms.Resize((224, 224)),
-        transforms.ColorJitter(hue=(-0.5, 0.5)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
+    image_transforms = {
+        'train':
+            transforms.Compose([
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomVerticalFlip(),
+                transforms.RandomPerspective(distortion_scale=0.2, p=0.1, interpolation=3, fill=255),
+                transforms.RandomChoice([
+                    transforms.CenterCrop(180),
+                    transforms.CenterCrop(160),
+                    transforms.CenterCrop(140),
+                    transforms.CenterCrop(120),
+                    transforms.Compose([
+                        transforms.CenterCrop(280),
+                        transforms.Grayscale(3),
+                    ]),
+                    transforms.Compose([
+                        transforms.CenterCrop(200),
+                        transforms.Grayscale(3),
+                    ]),
+                ]),
+                transforms.Resize((224, 224)),
+                transforms.ColorJitter(hue=(0.1, 0.2)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ]),
+        'val':
+            transforms.Compose([
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomVerticalFlip(),
+                transforms.RandomPerspective(distortion_scale=0.2, p=0.1, interpolation=3, fill=255),
+                transforms.RandomChoice([
+                    transforms.CenterCrop(180),
+                    transforms.CenterCrop(160),
+                    transforms.CenterCrop(140),
+                    transforms.CenterCrop(120),
+                    transforms.Compose([
+                        transforms.CenterCrop(280),
+                        transforms.Grayscale(3),
+                    ]),
+                    transforms.Compose([
+                        transforms.CenterCrop(200),
+                        transforms.Grayscale(3),
+                    ]),
+                ]),
+                transforms.Resize((224, 224)),
+                transforms.ColorJitter(hue=(0.1, 0.2)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ]),
+        'test': transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+    }
 
-    val_transforms = transforms.Compose([
-        transforms.RandomChoice([
-            transforms.RandomRotation(0), transforms.RandomRotation(90),
-            transforms.RandomRotation(180), transforms.RandomRotation(270)
-        ]),
-        transforms.RandomPerspective(distortion_scale=0.09, p=0.75, interpolation=3, fill=255),
-        transforms.RandomGrayscale(),
-        transforms.Resize((224, 224)),
-        transforms.ColorJitter(hue=(-0.5, 0.5)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-
-    test_transforms = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-
-    train_dataset = torchvision.datasets.ImageFolder(TRAIN_DIR, train_transforms)
-    val_dataset = torchvision.datasets.ImageFolder(VAL_DIR, val_transforms)
+    train_dataset = torchvision.datasets.ImageFolder(PROCESSED_TRAIN_PATH, image_transforms['train'])
+    val_dataset = torchvision.datasets.ImageFolder(PROCESSED_VAL_PATH, image_transforms['val'])
 
     train_dataloader = DataLoader(
         train_dataset, batch_size=BATCH_SIZE,
@@ -205,11 +163,11 @@ if __name__ == '__main__':
     # Test
     # model.load_state_dict(torch.load('weights/model_39.torch'))
     img_info = defaultdict(list)
-    for filename in tqdm(os.listdir(TEST_DIR)):
+    for filename in tqdm(os.listdir(PROCESSED_TEST_PATH)):
         img_id = filename[filename.find('_') + 1: filename.find('_') + 5]
-        filepath = os.path.join(TEST_DIR, filename)
+        filepath = os.path.join(PROCESSED_TEST_PATH, filename)
         img = Image.open(filepath)
-        img = test_transforms(img)
+        img = image_transforms['test'](img)
         img = torch.reshape(img, (1, *img.shape)).to(DEVICE)
         res = model(img).cpu().argmax(dim=1).item()
         img_info[img_id].append(res)
